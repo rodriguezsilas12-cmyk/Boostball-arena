@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Cavebound — Survival Adventure</title>
+<style>
+:root{color-scheme:dark}*{box-sizing:border-box}body{margin:0;background:#101713;color:#eef4e8;font:14px system-ui, sans-serif;overflow:hidden}
+#game{display:block;width:100vw;height:100vh;image-rendering:pixelated;background:#263c2c}
+#hud{position:fixed;inset:10px 10px auto;display:flex;gap:8px;align-items:flex-start;pointer-events:none;flex-wrap:wrap}
+.pill,.panel{background:#111b17eF;border:1px solid #536a55;border-radius:9px;padding:7px 10px;box-shadow:0 3px 12px #0006}
+#bars{min-width:150px} .bar{height:8px;background:#38443b;border-radius:8px;margin:4px 0 7px;overflow:hidden}.fill{height:100%;width:100%}#health{background:#dc5a52}#hunger{background:#e5b84c}#thirst{background:#5ba9df}
+#buttons{position:fixed;right:12px;top:12px;display:flex;gap:7px;pointer-events:auto}button{background:#263b30;color:#fff;border:1px solid #789077;border-radius:8px;padding:9px 12px;font-weight:700}button:active{background:#48674f}
+#panel{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);width:min(560px,94vw);max-height:82vh;overflow:auto;display:none;background:#142019f5;border:2px solid #789077;border-radius:14px;padding:16px;box-shadow:0 10px 50px #000b}
+#panel h2{margin:0 0 10px}#items{display:grid;grid-template-columns:repeat(auto-fit,minmax(125px,1fr));gap:8px}.item{border:1px solid #50634f;background:#1e3025;border-radius:8px;padding:9px;min-height:64px}.muted{color:#b7c6b2;font-size:12px}.actions{display:flex;gap:7px;flex-wrap:wrap;margin-top:12px}
+#hint{position:fixed;bottom:12px;left:50%;transform:translateX(-50%);max-width:95vw;text-align:center;background:#101a15df;border:1px solid #62775e;padding:8px 12px;border-radius:9px}
+#touch{position:fixed;bottom:70px;left:12px;display:none;gap:6px;grid-template-columns:repeat(3,42px);grid-template-rows:repeat(2,42px)}
+#touch button{padding:0;font-size:18px;touch-action:none}#touch button:nth-child(1){grid-column:2}
+#touch button:nth-child(2){grid-column:1;grid-row:2}#touch button:nth-child(3){grid-column:2;grid-row:2}#touch button:nth-child(4){grid-column:3;grid-row:2}
+#touchActions{position:fixed;bottom:78px;right:12px;display:none;gap:7px;flex-direction:column}
+@media(max-width:800px){#touch,#touchActions{display:grid}#touchActions{display:flex}#hint{bottom:8px;font-size:12px}#hud{max-width:72vw}.pill{padding:6px 8px}}
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<div id="hud">
+ <div class="pill" id="bars">❤️ <span id="hpText">100</span><div class="bar"><div class="fill" id="health"></div></div>
+ 🍖 <span id="foodText">100</span><div class="bar"><div class="fill" id="hunger"></div></div>
+ 💧 <span id="waterText">100</span><div class="bar"><div class="fill" id="thirst"></div></div></div>
+ <div class="pill">🪙 <b id="coins">0</b></div><div class="pill">📍 <b id="zone">Greenwood</b></div>
+</div>
+<div id="buttons"><button onclick="openPanel('Inventory')">🎒 Inventory (I)</button><button onclick="openPanel('Map')">🗺 Map (M)</button><button onclick="openPanel('Crafting')">⚒ Craft (C)</button></div>
+<div id="panel"><h2 id="panelTitle">Inventory</h2><div id="panelBody"></div><div class="actions"><button onclick="closePanel()">Close</button></div></div>
+<div id="hint">WASD / arrows move · E gather/open · Space attack · I inventory · C craft · M map</div>
+<div id="touch"><button data-key="ArrowUp">▲</button><button data-key="ArrowLeft">◀</button><button data-key="ArrowDown">▼</button><button data-key="ArrowRight">▶</button></div>
+<div id="touchActions"><button onclick="interact()">Gather / Open</button><button onclick="attack()">Attack</button></div>
+<script>
+const canvas=document.getElementById('game'),ctx=canvas.getContext('2d');
+let W=innerWidth,H=innerHeight;function resize(){W=innerWidth;H=innerHeight;canvas.width=W;canvas.height=H}addEventListener('resize',resize);resize();
+const tile=32, worldW=90,worldH=70;
+let player={x:worldW*tile/2,y:worldH*tile/2,hp:100,hunger:100,thirst:100,coins:12,dir:0};
+let inventory={Wood:5,Stone:4,Fiber:3,Berries:3,Water:2,Ore:0,Slime:0,Meat:0,Plank:0,Iron:0};
+let gear={weapon:'Wooden Sword',armor:'Cloth Armor',pickaxe:'Stone Pickaxe'};
+let world=[],enemies=[],chests=[],drops=[],keys={},panel=null,day=0,notice='Find resources, open chests and return to the safe camp.';
+let safe={x:worldW*tile/2,y:worldH*tile/2};
+for(let y=0;y<worldH;y++){world[y]=[];for(let x=0;x<worldW;x++){let r=Math.random();world[y][x]=r<.08?'tree':r<.15?'rock':r<.18?'ore':'grass'}}
+function pos(x,y){return {x:x*tile+tile/2,y:y*tile+tile/2}}
+for(let i=0;i<105;i++){let x=4+Math.random()*(worldW-8),y=4+Math.random()*(worldH-8);if(Math.hypot(x*tile-safe.x,y*tile-safe.y)>230)enemies.push({x:x*tile,y:y*tile,hp:30,max:30,kind:Math.random()<.6?'Slime':'Cave Bat',speed:Math.random()*.45+.35,damage:5,drop:Math.random()<.5?'Slime':'Meat'})}
+for(let i=0;i<32;i++){let x=5+Math.random()*(worldW-10),y=5+Math.random()*(worldH-10);chests.push({x:x*tile,y:y*tile,opened:false})}
+function itemAdd(k,n=1){inventory[k]=(inventory[k]||0)+n}
+function itemTake(k,n=1){if((inventory[k]||0)<n)return false;inventory[k]-=n;return true}
+function say(s){notice=s;document.getElementById('hint').textContent=s;clearTimeout(window.msgTimer);window.msgTimer=setTimeout(()=>document.getElementById('hint').textContent='WASD / arrows move · E gather/open · Space attack · I inventory · C craft · M map',2800)}
+function zoneName(){let d=Math.hypot(player.x-safe.x,player.y-safe.y);return d<190?'Safe Camp':player.x>worldW*tile*.65?'Abandoned Outpost':player.y>worldH*tile*.6?'Moss Caves':'Greenwood'}
+function draw(){
+ ctx.clearRect(0,0,W,H);let camX=player.x-W/2,camY=player.y-H/2;
+ let sx=Math.max(0,Math.floor(camX/tile)),ex=Math.min(worldW,Math.ceil((camX+W)/tile)+1),sy=Math.max(0,Math.floor(camY/tile)),ey=Math.min(worldH,Math.ceil((camY+H)/tile)+1);
+ for(let y=sy;y<ey;y++)for(let x=sx;x<ex;x++){let t=world[y][x],px=x*tile-camX,py=y*tile-camY;ctx.fillStyle=(x+y)%2?'#426342':'#3d5d3d';ctx.fillRect(px,py,tile,tile);ctx.strokeStyle='#29452e';ctx.strokeRect(px,py,tile,tile);
+ if(t==='tree'){ctx.fillStyle='#63452d';ctx.fillRect(px+13,py+17,7,14);ctx.fillStyle='#1e492b';ctx.beginPath();ctx.arc(px+16,py+13,13,0,7);ctx.fill()}
+ if(t==='rock'||t==='ore'){ctx.fillStyle=t==='ore'?'#9b9162':'#777f79';ctx.beginPath();ctx.arc(px+16,py+17,10,0,7);ctx.fill();if(t==='ore'){ctx.fillStyle='#e2c76c';ctx.fillRect(px+12,py+12,5,5)}}
+ }
+ for(let c of chests)if(!c.opened){ctx.fillStyle='#9b632c';ctx.fillRect(c.x-camX-10,c.y-camY-8,20,16);ctx.fillStyle='#e5bd56';ctx.fillRect(c.x-camX-2,c.y-camY-8,4,16)}
+ for(let d of drops){ctx.fillStyle='#e7d17b';ctx.fillRect(d.x-camX-4,d.y-camY-4,8,8)}
+ for(let e of enemies){if(e.hp<=0)continue;ctx.fillStyle=e.kind==='Slime'?'#7acb70':'#a98ad6';ctx.beginPath();ctx.arc(e.x-camX,e.y-camY,12,0,7);ctx.fill();ctx.fillStyle='#271d2a';ctx.fillRect(e.x-camX-5,e.y-camY-3,3,3);ctx.fillRect(e.x-camX+3,e.y-camY-3,3,3);ctx.fillStyle='#321f20';ctx.fillRect(e.x-camX-12,e.y-camY-19,24,4);ctx.fillStyle='#df6157';ctx.fillRect(e.x-camX-12,e.y-camY-19,24*e.hp/e.max,4)}
+ // camp
+ ctx.fillStyle='#c5ad75';ctx.fillRect(safe.x-camX-36,safe.y-camY-25,72,50);ctx.fillStyle='#7b5335';ctx.fillRect(safe.x-camX-18,safe.y-camY-18,36,35);ctx.fillStyle='#f1d18b';ctx.fillRect(safe.x-camX-5,safe.y-camY+2,10,15);
+ // player
+ ctx.fillStyle='#f2d5a2';ctx.fillRect(player.x-camX-7,player.y-camY-11,14,20);ctx.fillStyle='#345b8b';ctx.fillRect(player.x-camX-8,player.y-camY-2,16,12);
+ ctx.fillStyle='#17221b';ctx.fillRect(player.x-camX-4,player.y-camY-6,3,3);ctx.fillRect(player.x-camX+2,player.y-camY-6,3,3);
+ requestAnimationFrame(draw);
+}
+function update(){
+ let dx=0,dy=0;if(keys.w||keys.ArrowUp)dy--;if(keys.s||keys.ArrowDown)dy++;if(keys.a||keys.ArrowLeft)dx--;if(keys.d||keys.ArrowRight)dx++;let len=Math.hypot(dx,dy)||1;player.x=Math.max(16,Math.min(worldW*tile-16,player.x+dx/len*3));player.y=Math.max(16,Math.min(worldH*tile-16,player.y+dy/len*3));
+ for(let e of enemies){if(e.hp<=0)continue;let d=Math.hypot(player.x-e.x,player.y-e.y);if(d<240){e.x+=(player.x-e.x)/Math.max(d,1)*e.speed;e.y+=(player.y-e.y)/Math.max(d,1)*e.speed;if(d<23&&Math.random()<.018&&zoneName()!=='Safe Camp'){player.hp=Math.max(0,player.hp-e.damage);if(player.hp===0){player.hp=55;player.x=safe.x;player.y=safe.y;player.coins=Math.max(0,player.coins-5);say('You were rescued at camp. 5 coins were lost.')}}}}
+ if(Math.random()<.002){player.hunger=Math.max(0,player.hunger-1);player.thirst=Math.max(0,player.thirst-1)}
+ if(player.hunger===0||player.thirst===0)player.hp=Math.max(1,player.hp-.02);
+ document.getElementById('hpText').textContent=Math.ceil(player.hp);document.getElementById('foodText').textContent=Math.ceil(player.hunger);document.getElementById('waterText').textContent=Math.ceil(player.thirst);
+ document.getElementById('health').style.width=player.hp+'%';document.getElementById('hunger').style.width=player.hunger+'%';document.getElementById('thirst').style.width=player.thirst+'%';document.getElementById('coins').textContent=player.coins;document.getElementById('zone').textContent=zoneName();
+}
+setInterval(update,16);draw();
+function nearest(){let best=null,bd=58;for(let c of chests){let d=Math.hypot(player.x-c.x,player.y-c.y);if(d<bd&&!c.opened){best={type:'chest',obj:c};bd=d}}
+ let tx=Math.floor(player.x/tile),ty=Math.floor(player.y/tile);for(let y=Math.max(0,ty-1);y<=Math.min(worldH-1,ty+1);y++)for(let x=Math.max(0,tx-1);x<=Math.min(worldW-1,tx+1);x++){let d=Math.hypot(player.x-(x*tile+16),player.y-(y*tile+16));if(d<bd&&world[y][x]!=='grass'){best={type:world[y][x],x,y};bd=d}}
+ return best}
+function interact(){let n=nearest();if(!n){say('Nothing nearby to gather.');return}if(n.type==='chest'){n.obj.opened=true;let gold=5+Math.floor(Math.random()*16);player.coins+=gold;let loot=['Ore','Berries','Water','Fiber'][Math.floor(Math.random()*4)];itemAdd(loot,1+Math.floor(Math.random()*3));say(`Chest opened! +${gold} coins and ${loot}.`);return}
+ if(n.type==='tree'){world[n.y][n.x]='grass';itemAdd('Wood',3);say('Collected 3 Wood.')}
+ if(n.type==='rock'){world[n.y][n.x]='grass';itemAdd('Stone',2);say('Collected 2 Stone.')}
+ if(n.type==='ore'){world[n.y][n.x]='grass';itemAdd('Ore',2);say('Mined 2 Ore.')}
+}
+function attack(){let e=enemies.filter(e=>e.hp>0&&Math.hypot(player.x-e.x,player.y-e.y)<58).sort((a,b)=>Math.hypot(player.x-a.x,player.y-a.y)-Math.hypot(player.x-b.x,player.y-b.y))[0];if(!e){say('No monster close enough.');return}let dmg=gear.weapon==='Iron Sword'?24:gear.weapon==='Stone Sword'?16:10;e.hp-=dmg;if(e.hp<=0){itemAdd(e.drop,1+Math.floor(Math.random()*2));player.coins+=3;say(`${e.kind} defeated! Loot and 3 coins collected.`)}else say(`Hit ${e.kind}!`)}
+function openPanel(which){panel=which;document.getElementById('panel').style.display='block';document.getElementById('panelTitle').textContent=which;renderPanel()}
+function closePanel(){document.getElementById('panel').style.display='none';panel=null}
+function renderPanel(){let b=document.getElementById('panelBody');b.innerHTML='';
+ if(panel==='Inventory'){let h=`<p class="muted">Your backpack contents and equipped gear.</p><div id="items">`;for(let [k,v] of Object.entries(inventory))h+=`<div class="item"><b>${k}</b><div>${v} owned</div></div>`;h+=`</div><h3>Equipped</h3><div class="item">⚔️ ${gear.weapon}<br>🛡️ ${gear.armor}<br>⛏️ ${gear.pickaxe}</div><div class="actions"><button onclick="useItem('Berries')">Eat berries</button><button onclick="useItem('Meat')">Eat meat</button><button onclick="useItem('Water')">Drink water</button></div>`;b.innerHTML=h}
+ if(panel==='Crafting'){b.innerHTML='<p class="muted">Spend gathered materials to make better gear.</p><div id="items"></div>';let recipes=[['Stone Sword','Wood',3,'Stone',5],['Iron Sword','Wood',4,'Iron',4],['Cloth Armor','Fiber',6,'Wood',2],['Iron Armor','Iron',8,'Fiber',4],['Stone Pickaxe','Wood',2,'Stone',4],['Water Flask','Fiber',2,'Wood',1]];for(let r of recipes){let d=document.createElement('div');d.className='item';d.innerHTML=`<b>${r[0]}</b><div class="muted">${r[2]} ${r[1]} + ${r[4]} ${r[3]}</div><button>Craft</button>`;d.querySelector('button').onclick=()=>{if(itemTake(r[1],r[2])&&itemTake(r[3],r[4])){if(r[0].includes('Sword'))gear.weapon=r[0];else if(r[0].includes('Armor'))gear.armor=r[0];else if(r[0].includes('Pickaxe'))gear.pickaxe=r[0];else itemAdd('Water',2);say(r[0]+' crafted!');renderPanel()}else say('Not enough materials.');};(b.querySelector('#items')||b).appendChild(d)}}
+ if(panel==='Map'){b.innerHTML='<p>🗺️ World map — explore from the central Safe Camp.</p><div class="item">🏕️ Safe Camp — protected trading area</div><div class="item">🌲 Greenwood — wood, stone and basic monsters</div><div class="item">⛰️ Moss Caves — ore, chests and cave bats</div><div class="item">🏚️ Abandoned Outpost — stronger monsters and better loot</div><p class="muted">Current location: '+zoneName()+'</p>'}
+ if(panel==='Shop'){b.innerHTML='<p>Trade supplies for coins. Buy or sell gathered materials.</p><div id="items"></div>';for(let [k,v] of Object.entries(inventory)){if(v>0){let d=document.createElement('div');d.className='item';d.innerHTML=`<b>${k}</b><div>${v} owned · ${sellPrice(k)} coins each</div><button>Sell 1</button>`;d.querySelector('button').onclick=()=>{if(itemTake(k)){player.coins+=sellPrice(k);renderPanel()}};(b.querySelector('#items')||b).appendChild(d)}}}
+}
+function sellPrice(k){return ({Wood:2,Stone:2,Fiber:2,Berries:2,Water:3,Ore:5,Slime:4,Meat:4,Iron:8})[k]||1}
+function useItem(k){if(!itemTake(k)){say('You do not have any '+k+'.');return}if(k==='Berries')player.hunger=Math.min(100,player.hunger+18);if(k==='Meat')player.hunger=Math.min(100,player.hunger+35);if(k==='Water')player.thirst=Math.min(100,player.thirst+35);renderPanel()}
+addEventListener('keydown',e=>{keys[e.key]=true;if(e.key==='e'||e.key==='E')interact();if(e.code==='Space')attack();if(e.key==='i'||e.key==='I')panel?closePanel():openPanel('Inventory');if(e.key==='c'||e.key==='C')openPanel('Crafting');if(e.key==='m'||e.key==='M')openPanel('Map');if(e.key==='Escape')closePanel()});
+addEventListener('keyup',e=>keys[e.key]=false);
+document.querySelectorAll('#touch button').forEach(b=>{let k=b.dataset.key;b.addEventListener('pointerdown',e=>{e.preventDefault();keys[k]=true});['pointerup','pointerleave','pointercancel'].forEach(ev=>b.addEventListener(ev,()=>keys[k]=false))});
+setInterval(()=>{if(Math.hypot(player.x-safe.x,player.y-safe.y)<95){if(!document.getElementById('campShop')){let s=document.createElement('button');s.id='campShop';s.textContent='Open Camp Shop';s.style='position:fixed;left:50%;top:62%;transform:translateX(-50%)';s.onclick=()=>openPanel('Shop');document.body.appendChild(s)}}else document.getElementById('campShop')?.remove()},400);
+</script></body></html>

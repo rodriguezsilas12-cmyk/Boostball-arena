@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#070b16" />
+  <title>Boostball Arena</title>
+</head>
+<body>
+  <div id="app">
+    <div id="hud">
+      <div class="brand"><span class="brand-mark">B</span><div><b>BOOSTBALL</b><small>ARENA / FREEPLAY</small></div></div>
+      <div class="score"><span id="blue-score">0</span><i>—</i><span id="orange-score">0</span></div>
+      <div class="hud-right"><span class="live-dot"></span> FREEPLAY <button id="pause-btn">Ⅱ</button></div>
+    </div>
+    <div id="telemetry"><b id="speed">0</b><small>KPH</small><div class="boost-meter"><div id="boost-fill"></div></div><span id="boost-value">100</span><small>BOOST</small></div>
+    <div id="center-message">KICKOFF <small>Drive into the ball and score!</small></div>
+    <div id="controls-hint">WASD DRIVE <span>•</span> SPACE JUMP <span>•</span> SHIFT BOOST <span>•</span> C BALL CAM <span>•</span> F2 TRAINING <span>•</span> F3 TAS</div>
+    <div id="training-panel" class="panel hidden">
+      <header><div><b>FREEPLAY TOOLS</b><small>TRAINING / PHYSICS</small></div><button data-close="training-panel">×</button></header>
+      <div class="panel-content">
+        <div class="tool-grid">
+          <button data-shot="dribble"><b>01</b><span>DRIBBLE SETUP<small>Ball on car roof</small></span></button>
+          <button data-shot="pass"><b>02</b><span>PASS TO ME<small>Ball toward player</small></span></button>
+          <button data-shot="wall"><b>03</b><span>WALL ROLL<small>Side-wall setup</small></span></button>
+          <button data-shot="defend"><b>04</b><span>DEFEND SHOT<small>Shot at own net</small></span></button>
+        </div>
+        <button id="reset-btn" class="wide-btn">↺ RESET CAR + BALL <kbd>R</kbd></button>
+        <label>GAME SPEED <output id="speed-output">1.00×</output><input id="game-speed" type="range" min=".25" max="2" step=".05" value="1"></label>
+        <label>GRAVITY SCALE <output id="gravity-output">1.00×</output><input id="gravity-scale" type="range" min=".25" max="2" step=".05" value="1"></label>
+        <label>BALL BOUNCE <output id="bounce-output">0.82</output><input id="ball-bounce" type="range" min=".3" max="1" step=".01" value=".82"></label>
+        <div class="toggle-row"><span>UNLIMITED BOOST</span><input id="unlimited-boost" type="checkbox"></div>
+        <div class="toggle-row"><span>SHOW HITBOXES</span><input id="hitboxes" type="checkbox"></div>
+        <div class="toggle-row"><span>TRAJECTORY PREDICTOR</span><input id="predictor" type="checkbox"></div>
+        <div class="shot-save"><input id="shot-name" placeholder="Training shot name"><button id="save-shot">SAVE JSON</button><button id="load-shot">LOAD JSON</button><input id="shot-file" type="file" accept="application/json" hidden></div>
+        <p class="panel-note">Training shots save car + ball transforms and velocities in a portable JSON file.</p>
+      </div>
+    </div>
+    <div id="tas-panel" class="panel hidden">
+      <header><div><b>TAS / REPLAY DOCK</b><small>DETERMINISTIC TICK INSPECTOR</small></div><button data-close="tas-panel">×</button></header>
+      <div class="panel-content">
+        <div class="tas-buttons"><button id="tas-pause">PAUSE</button><button id="tas-step">STEP +1</button><button id="tas-record">● RECORD</button><button id="tas-play">PLAY</button></div>
+        <div class="timeline"><input id="timeline" type="range" min="0" max="0" value="0"><div><span>FRAME <b id="frame-count">0</b></span><span>TICK <b id="tick-count">0</b></span></div></div>
+        <div class="vector-readout"><span>POSITION <b id="pos-readout">0, 0, 0</b></span><span>VELOCITY <b id="vel-readout">0, 0, 0</b></span><span>ROTATION <b id="rot-readout">0, 0, 0</b></span></div>
+        <div class="tas-buttons"><button id="save-state">SAVE STATE <kbd>F5</kbd></button><button id="load-state">LOAD STATE <kbd>F7</kbd></button><button id="export-replay">EXPORT INPUTS</button></div>
+        <p class="panel-note">Records one input sample per simulation tick. Frame stepping pauses the fixed 120 Hz loop.</p>
+      </div>
+    </div>
+    <div id="goal-flash"></div>
+  </div>
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
